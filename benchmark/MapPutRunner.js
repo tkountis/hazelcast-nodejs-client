@@ -10,7 +10,7 @@ Client.newHazelcastClient()
     .then((client) => client.getMap('default'))
     .then((map) => {
         const benchmark = new Benchmark({
-            nextOp: () => map.put('foo', 'bar'),
+            nextOp: () => map.set('foo', 'bar'),
             totalOpsCount: REQ_COUNT,
             batchSize: BATCH_SIZE
         });

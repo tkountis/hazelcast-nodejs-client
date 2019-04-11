@@ -27,20 +27,22 @@ const MASK_2BYTE = (1 << 16) - 1;
 const MASK_4BYTE = (1 << 32) - 1;
 
 export class ObjectDataOutput implements DataOutput {
-    protected buffer: Buffer;
+    // protected buffer: Buffer;
     protected bigEndian: boolean;
     private service: SerializationService;
     private pos: number;
 
+    protected static buffer = Buffer.allocUnsafe(2048);
+
     constructor(length: number, service: SerializationService, isBigEndian: boolean) {
-        this.buffer = new Buffer(length);
+        // this.buffer = new Buffer(length);
         this.service = service;
         this.bigEndian = isBigEndian;
         this.pos = 0;
     }
 
     clear(): void {
-        this.buffer = new Buffer(this.buffer.length);
+        // this.buffer = new Buffer(this.buffer.length);
         this.pos = 0;
     }
 
@@ -57,23 +59,21 @@ export class ObjectDataOutput implements DataOutput {
     }
 
     toBuffer(): Buffer {
-        if (this.buffer == null || this.pos === 0) {
-            return new Buffer(0);
+        if (this.pos === 0) {
+            return ObjectDataOutput.buffer.slice(0, 0);
         } else {
-            const snapBuffer = new Buffer(this.pos);
-            this.buffer.copy(snapBuffer, 0, 0, this.pos);
-            return snapBuffer;
+            return ObjectDataOutput.buffer.slice(0, this.pos);
         }
     }
 
     write(byte: number | Buffer): void {
         if (Buffer.isBuffer(byte)) {
             this.ensureAvailable(byte.length);
-            byte.copy(this.buffer, this.pos);
+            byte.copy(ObjectDataOutput.buffer, this.pos);
             this.pos += byte.length;
         } else {
             this.ensureAvailable(BitsUtil.BYTE_SIZE_IN_BYTES);
-            BitsUtil.writeUInt8(this.buffer, this.pos, byte & MASK_1BYTE);
+            BitsUtil.writeUInt8(ObjectDataOutput.buffer, this.pos, byte & MASK_1BYTE);
             this.pos += BitsUtil.BYTE_SIZE_IN_BYTES;
         }
     }
@@ -103,7 +103,7 @@ export class ObjectDataOutput implements DataOutput {
 
     writeChar(char: string): void {
         this.ensureAvailable(BitsUtil.CHAR_SIZE_IN_BYTES);
-        BitsUtil.writeUInt16(this.buffer, this.pos, char.charCodeAt(0), this.isBigEndian());
+        BitsUtil.writeUInt16(ObjectDataOutput.buffer, this.pos, char.charCodeAt(0), this.isBigEndian());
         this.pos += BitsUtil.CHAR_SIZE_IN_BYTES;
     }
 
@@ -130,7 +130,7 @@ export class ObjectDataOutput implements DataOutput {
 
     writeDouble(double: number): void {
         this.ensureAvailable(BitsUtil.DOUBLE_SIZE_IN_BYTES);
-        BitsUtil.writeDouble(this.buffer, this.pos, double, this.isBigEndian());
+        BitsUtil.writeDouble(ObjectDataOutput.buffer, this.pos, double, this.isBigEndian());
         this.pos += BitsUtil.DOUBLE_SIZE_IN_BYTES;
     }
 
@@ -140,7 +140,7 @@ export class ObjectDataOutput implements DataOutput {
 
     writeFloat(float: number): void {
         this.ensureAvailable(BitsUtil.FLOAT_SIZE_IN_BYTES);
-        BitsUtil.writeFloat(this.buffer, this.pos, float, this.isBigEndian());
+        BitsUtil.writeFloat(ObjectDataOutput.buffer, this.pos, float, this.isBigEndian());
         this.pos += BitsUtil.FLOAT_SIZE_IN_BYTES;
     }
 
@@ -150,13 +150,13 @@ export class ObjectDataOutput implements DataOutput {
 
     writeInt(int: number): void {
         this.ensureAvailable(BitsUtil.INT_SIZE_IN_BYTES);
-        BitsUtil.writeInt32(this.buffer, this.pos, int, this.isBigEndian());
+        BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, int, this.isBigEndian());
         this.pos += BitsUtil.INT_SIZE_IN_BYTES;
     }
 
     writeIntBE(int: number): void {
         this.ensureAvailable(BitsUtil.INT_SIZE_IN_BYTES);
-        BitsUtil.writeInt32(this.buffer, this.pos, int, true);
+        BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, int, true);
         this.pos += BitsUtil.INT_SIZE_IN_BYTES;
     }
 
@@ -167,14 +167,14 @@ export class ObjectDataOutput implements DataOutput {
     writeLong(long: Long): void {
         this.ensureAvailable(BitsUtil.LONG_SIZE_IN_BYTES);
         if (this.isBigEndian()) {
-            BitsUtil.writeInt32(this.buffer, this.pos, long.high, true);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, long.high, true);
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
-            BitsUtil.writeInt32(this.buffer, this.pos, long.low, true);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, long.low, true);
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
         } else {
-            BitsUtil.writeInt32(this.buffer, this.pos, long.low, false);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, long.low, false);
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
-            BitsUtil.writeInt32(this.buffer, this.pos, long.high, false);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, this.pos, long.high, false);
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
         }
     }
@@ -189,7 +189,7 @@ export class ObjectDataOutput implements DataOutput {
 
     writeShort(short: number): void {
         this.ensureAvailable(BitsUtil.SHORT_SIZE_IN_BYTES);
-        BitsUtil.writeInt16(this.buffer, this.pos, short, this.isBigEndian());
+        BitsUtil.writeInt16(ObjectDataOutput.buffer, this.pos, short, this.isBigEndian());
         this.pos += BitsUtil.SHORT_SIZE_IN_BYTES;
     }
 
@@ -227,14 +227,14 @@ export class ObjectDataOutput implements DataOutput {
     }
 
     private available(): number {
-        return this.buffer == null ? 0 : this.buffer.length - this.pos;
+        return ObjectDataOutput.buffer == null ? 0 : ObjectDataOutput.buffer.length - this.pos;
     }
 
     private ensureAvailable(size: number): void {
         if (this.available() < size) {
-            const newBuffer = new Buffer(this.pos + size);
-            this.buffer.copy(newBuffer, 0, 0, this.pos);
-            this.buffer = newBuffer;
+            const newBuffer = Buffer.allocUnsafe(this.pos + size);
+            ObjectDataOutput.buffer.copy(newBuffer, 0, 0, this.pos);
+            ObjectDataOutput.buffer = newBuffer;
         }
     }
 
@@ -251,9 +251,9 @@ export class ObjectDataOutput implements DataOutput {
 export class PositionalObjectDataOutput extends ObjectDataOutput implements PositionalDataOutput {
     pwrite(position: number, byte: number | Buffer): void {
         if (Buffer.isBuffer(byte)) {
-            byte.copy(this.buffer, position);
+            byte.copy(ObjectDataOutput.buffer, position);
         } else {
-            this.buffer[position] = byte;
+            ObjectDataOutput.buffer[position] = byte;
         }
     }
 
@@ -266,50 +266,51 @@ export class PositionalObjectDataOutput extends ObjectDataOutput implements Posi
     }
 
     pwriteChar(position: number, char: string): void {
-        BitsUtil.writeUInt16(this.buffer, position, char.charCodeAt(0), this.isBigEndian());
+        BitsUtil.writeUInt16(ObjectDataOutput.buffer, position, char.charCodeAt(0), this.isBigEndian());
     }
 
     pwriteDouble(position: number, double: number): void {
-        BitsUtil.writeDouble(this.buffer, position, double, this.isBigEndian());
+        BitsUtil.writeDouble(ObjectDataOutput.buffer, position, double, this.isBigEndian());
     }
 
     pwriteFloat(position: number, float: number): void {
-        BitsUtil.writeFloat(this.buffer, position, float, this.isBigEndian());
+        BitsUtil.writeFloat(ObjectDataOutput.buffer, position, float, this.isBigEndian());
     }
 
     pwriteInt(position: number, int: number): void {
-        BitsUtil.writeInt32(this.buffer, position, int, this.isBigEndian());
+        BitsUtil.writeInt32(ObjectDataOutput.buffer, position, int, this.isBigEndian());
     }
 
     pwriteIntBE(position: number, int: number): void {
-        BitsUtil.writeInt32(this.buffer, position, int, true);
+        BitsUtil.writeInt32(ObjectDataOutput.buffer, position, int, true);
     }
 
     pwriteLong(position: number, long: Long): void {
         if (this.isBigEndian()) {
-            BitsUtil.writeInt32(this.buffer, position, long.high, true);
-            BitsUtil.writeInt32(this.buffer, position + BitsUtil.INT_SIZE_IN_BYTES, long.low, true);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, position, long.high, true);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, position + BitsUtil.INT_SIZE_IN_BYTES, long.low, true);
         } else {
-            BitsUtil.writeInt32(this.buffer, position, long.low, false);
-            BitsUtil.writeInt32(this.buffer, position + BitsUtil.INT_SIZE_IN_BYTES, long.high, false);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, position, long.low, false);
+            BitsUtil.writeInt32(ObjectDataOutput.buffer, position + BitsUtil.INT_SIZE_IN_BYTES, long.high, false);
         }
     }
 
     pwriteShort(position: number, short: number): void {
-        BitsUtil.writeInt16(this.buffer, position, short, this.isBigEndian());
+        BitsUtil.writeInt16(ObjectDataOutput.buffer, position, short, this.isBigEndian());
     }
 }
 
 export class ObjectDataInput implements DataInput {
 
-    private buffer: Buffer;
+    // private buffer: Buffer;
     private offset: number;
     private service: SerializationService;
     private bigEndian: boolean;
     private pos: number;
 
+    protected static buffer = Buffer.allocUnsafe(2048);
+
     constructor(buffer: Buffer, offset: number, serializationService: SerializationService, isBigEndian: boolean) {
-        this.buffer = buffer;
         this.offset = offset;
         this.service = serializationService;
         this.bigEndian = isBigEndian;
@@ -331,9 +332,9 @@ export class ObjectDataInput implements DataInput {
     read(pos?: number): number {
         this.assertAvailable(BitsUtil.BYTE_SIZE_IN_BYTES, pos);
         if (pos === undefined) {
-            return BitsUtil.readUInt8(this.buffer, this.pos++);
+            return BitsUtil.readUInt8(ObjectDataInput.buffer, this.pos++);
         } else {
-            return BitsUtil.readUInt8(this.buffer, pos);
+            return BitsUtil.readUInt8(ObjectDataInput.buffer, pos);
         }
     }
 
@@ -357,10 +358,10 @@ export class ObjectDataInput implements DataInput {
         this.assertAvailable(BitsUtil.CHAR_SIZE_IN_BYTES);
         let readBytes: any;
         if (pos === undefined) {
-            readBytes = BitsUtil.readUInt16(this.buffer, this.pos, this.isBigEndian());
+            readBytes = BitsUtil.readUInt16(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.CHAR_SIZE_IN_BYTES;
         } else {
-            readBytes = BitsUtil.readUInt16(this.buffer, pos, this.isBigEndian());
+            readBytes = BitsUtil.readUInt16(ObjectDataInput.buffer, pos, this.isBigEndian());
         }
         return String.fromCharCode(readBytes);
     }
@@ -379,10 +380,10 @@ export class ObjectDataInput implements DataInput {
         this.assertAvailable(BitsUtil.DOUBLE_SIZE_IN_BYTES, pos);
         let ret: number;
         if (pos === undefined) {
-            ret = BitsUtil.readDouble(this.buffer, this.pos, this.isBigEndian());
+            ret = BitsUtil.readDouble(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.DOUBLE_SIZE_IN_BYTES;
         } else {
-            ret = BitsUtil.readDouble(this.buffer, pos, this.isBigEndian());
+            ret = BitsUtil.readDouble(ObjectDataInput.buffer, pos, this.isBigEndian());
         }
         return ret;
     }
@@ -395,10 +396,10 @@ export class ObjectDataInput implements DataInput {
         this.assertAvailable(BitsUtil.FLOAT_SIZE_IN_BYTES, pos);
         let ret: number;
         if (pos === undefined) {
-            ret = BitsUtil.readFloat(this.buffer, this.pos, this.isBigEndian());
+            ret = BitsUtil.readFloat(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.FLOAT_SIZE_IN_BYTES;
         } else {
-            ret = BitsUtil.readFloat(this.buffer, pos, this.isBigEndian());
+            ret = BitsUtil.readFloat(ObjectDataInput.buffer, pos, this.isBigEndian());
         }
         return ret;
     }
@@ -411,10 +412,10 @@ export class ObjectDataInput implements DataInput {
         this.assertAvailable(BitsUtil.INT_SIZE_IN_BYTES, pos);
         let ret: number;
         if (pos === undefined) {
-            ret = BitsUtil.readInt32(this.buffer, this.pos, this.isBigEndian());
+            ret = BitsUtil.readInt32(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
         } else {
-            ret = BitsUtil.readInt32(this.buffer, pos, this.isBigEndian());
+            ret = BitsUtil.readInt32(ObjectDataInput.buffer, pos, this.isBigEndian());
         }
         return ret;
     }
@@ -428,13 +429,13 @@ export class ObjectDataInput implements DataInput {
         let first: number;
         let second: number;
         if (pos === undefined) {
-            first = BitsUtil.readInt32(this.buffer, this.pos, this.isBigEndian());
+            first = BitsUtil.readInt32(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
-            second = BitsUtil.readInt32(this.buffer, this.pos, this.isBigEndian());
+            second = BitsUtil.readInt32(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.INT_SIZE_IN_BYTES;
         } else {
-            first = BitsUtil.readInt32(this.buffer, pos, this.isBigEndian());
-            second = BitsUtil.readInt32(this.buffer, pos + BitsUtil.INT_SIZE_IN_BYTES, this.isBigEndian());
+            first = BitsUtil.readInt32(ObjectDataInput.buffer, pos, this.isBigEndian());
+            second = BitsUtil.readInt32(ObjectDataInput.buffer, pos + BitsUtil.INT_SIZE_IN_BYTES, this.isBigEndian());
         }
         if (this.isBigEndian()) {
             return new Long(second, first);
@@ -455,10 +456,10 @@ export class ObjectDataInput implements DataInput {
         this.assertAvailable(BitsUtil.SHORT_SIZE_IN_BYTES, pos);
         let ret: number;
         if (pos === undefined) {
-            ret = BitsUtil.readInt16(this.buffer, this.pos, this.isBigEndian());
+            ret = BitsUtil.readInt16(ObjectDataInput.buffer, this.pos, this.isBigEndian());
             this.pos += BitsUtil.SHORT_SIZE_IN_BYTES;
         } else {
-            ret = BitsUtil.readInt16(this.buffer, pos, this.isBigEndian());
+            ret = BitsUtil.readInt16(ObjectDataInput.buffer, pos, this.isBigEndian());
         }
         return ret;
     }
@@ -538,12 +539,12 @@ export class ObjectDataInput implements DataInput {
 
     readCopy(other: Buffer, numBytes: number): void {
         this.assertAvailable(numBytes, this.pos);
-        this.buffer.copy(other, 0, this.pos, this.pos + numBytes);
+        ObjectDataInput.buffer.copy(other, 0, this.pos, this.pos + numBytes);
         this.pos += numBytes;
     }
 
     available(): number {
-        return this.buffer.length - this.pos;
+        return ObjectDataInput.buffer.length - this.pos;
     }
 
     private readArray<T>(func: Function, pos?: number): T[] {
@@ -563,8 +564,15 @@ export class ObjectDataInput implements DataInput {
     }
 
     private assertAvailable(numOfBytes: number, pos: number = this.pos): void {
-        assert(pos >= 0);
-        assert(pos + numOfBytes <= this.buffer.length);
+        assert(pos >= 0);       
+
+        if (this.available() < numOfBytes) {
+            const newBuffer = Buffer.allocUnsafe(pos + numOfBytes);
+            ObjectDataInput.buffer.copy(newBuffer, 0, 0, this.pos);
+            ObjectDataInput.buffer = newBuffer;
+        }
+
+        assert(pos + numOfBytes <= ObjectDataInput.buffer.length);
     }
 
     private addOrUndefined(base: number, adder: number): number {
