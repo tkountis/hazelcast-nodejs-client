@@ -169,31 +169,33 @@ export class SerializationServiceV1 implements SerializationService {
      * @param obj
      * @returns
      */
+
     findSerializerFor(obj: any): Serializer {
         if (obj === undefined) {
             throw new RangeError('undefined cannot be serialized.');
         }
-        let serializer: Serializer = null;
-        if (obj === null) {
-            serializer = this.findSerializerByName('null', false);
-        }
-        if (serializer === null) {
-            serializer = this.lookupDefaultSerializer(obj);
-        }
-        if (serializer === null) {
-            serializer = this.lookupCustomSerializer(obj);
-        }
-        if (serializer === null) {
-            serializer = this.lookupGlobalSerializer();
-        }
-        if (serializer === null) {
-            serializer = this.findSerializerByName('!json', false);
-        }
-        if (serializer === null) {
-            throw new RangeError('There is no suitable serializer for ' + obj + '.');
-        }
-        return serializer;
 
+        if (obj === null) {
+            return  this.findSerializerByName('null', false);
+        }
+
+        let serializer: Serializer;
+        if (serializer = this.lookupDefaultSerializer(obj)) {
+            return serializer;
+        }
+
+        if (serializer = this.lookupCustomSerializer(obj)) {
+            return serializer;
+        }
+
+        if (serializer = this.lookupGlobalSerializer()) {
+            return serializer;
+        }
+        if (serializer = this.findSerializerByName('!json', false)) {
+            return serializer;
+        }
+
+        throw new RangeError('There is no suitable serializer for ' + obj + '.');
     }
 
     protected lookupDefaultSerializer(obj: any): Serializer {
