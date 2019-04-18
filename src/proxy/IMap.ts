@@ -269,7 +269,7 @@ export interface IMap<K, V> extends DistributedObject {
      * @param ttl
      * @throws {RangeError} if key or value is null or undefined.
      */
-    set(key: K, value: V, ttl?: number): Promise<void>;
+    set(key: K, value: V, ttl?: Number): Promise<void>;
 
     /**
      * Releases the lock for this key.

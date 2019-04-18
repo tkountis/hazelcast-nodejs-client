@@ -47,8 +47,10 @@ export class MapSetCodec {
         clientMessage.appendString(name);
         clientMessage.appendData(key);
         clientMessage.appendData(value);
-        clientMessage.appendLong(threadId);
-        clientMessage.appendLong(ttl);
+        clientMessage.appendInt32(0);
+        clientMessage.appendInt32(threadId);
+        clientMessage.appendInt32(0);
+        clientMessage.appendInt32(ttl);
         clientMessage.updateFrameLength();
         return clientMessage;
     }

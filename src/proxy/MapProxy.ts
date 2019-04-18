@@ -402,7 +402,7 @@ export class MapProxy<K, V> extends BaseProxy implements IMap<K, V> {
         return this.replaceIfSameInternal(keyData, oldValueData, newValueData);
     }
 
-    set(key: K, value: V, ttl: number = -1): Promise<void> {
+    set(key: K, value: V, ttl: Number = -1): Promise<void> {
         assertNotNull(key);
         assertNotNull(value);
         const keyData = this.toData(key);

@@ -80,6 +80,8 @@ export class Invocation {
         this.invocationService = client.getInvocationService();
         this.deadline = new Date(new Date().getTime() + this.invocationService.getInvocationTimeoutMillis());
         this.request = request;
+        this.partitionId = -1;
+        this.handler = undefined;
     }
 
     static isRetrySafeError(err: Error): boolean {
@@ -90,7 +92,8 @@ export class Invocation {
      * @returns {boolean}
      */
     hasPartitionId(): boolean {
-        return this.hasOwnProperty('partitionId') && this.partitionId >= 0;
+        //his.hasOwnProperty('partitionId') &&
+        return this.partitionId >= 0;
     }
 
     isAllowedToRetryOnSelection(err: Error): boolean {
@@ -213,8 +216,13 @@ export class InvocationService {
      * @param buffer
      */
     processResponse(buffer: Buffer): void {
-        const clientMessage = new ClientMessage(buffer);
+        const clientMessage = ClientMessage.wrap(buffer);
         const correlationId = clientMessage.getCorrelationId().toNumber();
+        // console.log('Resp buffer ' + buffer + ' id: ' + correlationId + ' Pending: ' + Object.keys(this.pending));
+        if (!this.pending[correlationId]) {
+            console.log('Duplicate response for ' + correlationId + ' ' + clientMessage.getMessageType());
+            return;
+        }
         const messageType = clientMessage.getMessageType();
 
         if (clientMessage.hasFlags(BitsUtil.LISTENER_FLAG)) {
@@ -232,6 +240,7 @@ export class InvocationService {
             const remoteError = this.client.getErrorFactory().createErrorFromClientMessage(clientMessage);
             this.notifyError(pendingInvocation, remoteError);
         } else {
+            this.pending[correlationId].request.recycle();
             delete this.pending[correlationId];
             deferred.resolve(clientMessage);
         }
@@ -308,9 +317,11 @@ export class InvocationService {
     }
 
     private notifyError(invocation: Invocation, error: Error): void {
+        console.log('Error: ' + error);
         const correlationId = invocation.request.getCorrelationId().toNumber();
         if (this.rejectIfNotRetryable(invocation, error)) {
-            delete this.pending[invocation.request.getCorrelationId().toNumber()];
+            this.pending[correlationId].request.recycle();
+            delete this.pending[correlationId];
             return;
         }
         this.logger.debug('InvocationService',
@@ -352,12 +363,12 @@ export class InvocationService {
     private registerInvocation(invocation: Invocation): void {
         const message = invocation.request;
         const correlationId = message.getCorrelationId().toNumber();
-        if (invocation.hasPartitionId()) {
-            message.setPartitionId(invocation.partitionId);
-        } else {
-            message.setPartitionId(-1);
-        }
-        if (invocation.hasOwnProperty('handler')) {
+        // if (invocation.hasPartitionId()) {
+        message.setPartitionId(invocation.partitionId);
+        // } else {
+        //    message.setPartitionId(-1);
+        // }
+        if (invocation.handler) {
             this.eventHandlers[correlationId] = invocation;
         }
         this.pending[correlationId] = invocation;

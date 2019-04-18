@@ -41,21 +41,61 @@ import {BitsUtil} from './BitsUtil';
 import {Data} from './serialization/Data';
 import {HeapData} from './serialization/HeapData';
 
+class BufferPool {
+
+    private static DEFAULT_SZ = 512;
+    private readonly pool: Buffer[];
+    private cursor = 0;
+
+    constructor() {
+        this.pool = [];
+        for (let i = 0; i < 10000; i++) {
+           this.pool.push(Buffer.allocUnsafe(BufferPool.DEFAULT_SZ));
+        }
+    }
+
+    use(): Buffer {
+        // return Buffer.allocUnsafe(BufferPool.DEFAULT_SZ);
+        if (this.cursor >= this.pool.length) {
+            console.error('Outgrew the buffer ' + this.cursor );
+            throw new Error();
+        }
+        const buff = this.pool[this.cursor];
+        this.pool[this.cursor++] = null;
+        return buff;
+    }
+
+    recycle(buff: Buffer): void {
+        this.pool[--this.cursor] = buff;
+    }
+
+}
+
 class ClientMessage {
 
-    private buffer: Buffer;
+    private static BUFFERS = new BufferPool();
+
     private cursor: number = BitsUtil.HEADER_SIZE;
     private isRetryable: boolean;
+    private buffer: Buffer;
 
-    constructor(buffer: Buffer) {
-        this.buffer = buffer;
+    constructor(buff: Buffer) {
+        this.buffer = buff;
+    }
+
+    public static wrap(buffer: Buffer): ClientMessage {
+        return new ClientMessage(buffer);
     }
 
     public static newClientMessage(payloadSize: number): ClientMessage {
+        // console.trace();
         const totalSize = BitsUtil.HEADER_SIZE + payloadSize;
-        const buffer = new Buffer(totalSize);
-        buffer.fill(0, 0, totalSize);
-        const message = new ClientMessage(buffer);
+        // const buffer = new Buffer(totalSize);
+        // const buffer = ClientMessage.BUFFERS.use();
+        // //buffer.fill(0, 0, 256);
+        const message = new ClientMessage(ClientMessage.BUFFERS.use());
+        // message.buffer.fill(0, 0, 8192);
+        // message.buffer.fill(0, 0, 4096);
         message.setDataOffset(BitsUtil.HEADER_SIZE);
         message.setVersion(BitsUtil.VERSION);
         message.setFrameLength(totalSize);
@@ -65,7 +105,7 @@ class ClientMessage {
     }
 
     getBuffer(): Buffer {
-        return this.buffer;
+        return this.buffer.slice(0, this.getFrameLength());
     }
 
     getCorrelationId(): Long {
@@ -236,6 +276,11 @@ class ClientMessage {
 
     readMapEntry(): any {
         // TODO
+    }
+
+    recycle(): void {
+        ClientMessage.BUFFERS.recycle(this.buffer);
+        this.buffer = null;
     }
 
     private writeLongInternal(value: any, offset: number): void {

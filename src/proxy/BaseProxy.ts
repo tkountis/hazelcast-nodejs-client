@@ -147,7 +147,7 @@ export class BaseProxy {
         return promise.then(function (clientMessage: ClientMessage): any {
             if (codec.decodeResponse) {
                 const raw = codec.decodeResponse(clientMessage, toObject);
-
+                clientMessage.recycle();
                 const response = raw.response;
                 if (typeof response === 'undefined') {
                     return raw;

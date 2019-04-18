@@ -9,7 +9,8 @@
         "preserveConstEnums": true,
         "lib": [
             "es5",
-            "es6"
+            "es6",
+            "esnext.bigint"
         ],
         "removeComments": false,
         "sourceMap": true

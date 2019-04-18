@@ -185,6 +185,7 @@ export class ClientConnectionManager extends EventEmitter {
         const connectionResolver = DeferredPromise<tls.TLSSocket>();
         const socket = tls.connect(address.port, address.host, configOpts);
         socket.once('secureConnect', () => {
+            socket.setNoDelay(true);
             connectionResolver.resolve(socket);
         });
         socket.on('error', (e: any) => {
@@ -201,6 +202,7 @@ export class ClientConnectionManager extends EventEmitter {
         const connectionResolver = DeferredPromise<net.Socket>();
         const socket = net.connect(address.port, address.host);
         socket.once('connect', () => {
+            socket.setNoDelay(true);
             connectionResolver.resolve(socket);
         });
         socket.on('error', (e: any) => {

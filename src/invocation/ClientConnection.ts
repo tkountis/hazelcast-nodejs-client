@@ -22,6 +22,143 @@ import HazelcastClient from '../HazelcastClient';
 import {IOError} from '../HazelcastError';
 import Address = require('../Address');
 import {DeferredPromise} from '../Util';
+import Socket = NodeJS.Socket;
+import ClientMessage = require('../ClientMessage');
+
+class WriteQueue {
+
+    private socket: Socket;
+    private queue: any = [];
+    private error: any;
+    private isRunning: boolean;
+    private coalescingThreshold: Number = 16384;
+
+    constructor(socket: Socket) {
+        this.socket = socket;
+
+    }
+
+    push(request: Buffer, callback: Function): void {
+        if (this.error) {
+            // There was a write error, there is no point in further trying to write to the socket.
+            return process.nextTick(() => {
+                callback(this.error);
+            });
+        }
+        this.queue.push({
+            request,
+            callback,
+        });
+        this.run();
+    }
+
+    run(): void {
+        if (!this.isRunning) {
+            this.process();
+        }
+    }
+
+    process(): void {
+        const self = this;
+        this.whilst(
+            () => {
+                return self.queue.length > 0;
+            },
+            (next: any) => {
+                self.isRunning = true;
+                const buffers = [];
+                const callbacks = [];
+                let totalLength = 0;
+                while (totalLength < self.coalescingThreshold && self.queue.length > 0) {
+                    const writeItem = self.queue.shift();
+                    try {
+                        const data = writeItem.request;
+                        totalLength += data.length;
+                        buffers.push(data);
+                        callbacks.push(writeItem.callback);
+                    } catch (err) {
+                        writeItem.callback(err);
+                        // break and flush what we have
+                        break;
+                    }
+                }
+                if (buffers.length === 0) {
+                    // No need to invoke socket.write()
+                    return next();
+                }
+                // Before invoking socket.write(), mark that the request has been written to avoid race conditions.
+                for (let i = 0; i < callbacks.length; i++) {
+                    callbacks[i]();
+                }
+                self.socket.write(Buffer.concat(buffers, totalLength), (err: Error) => {
+                    if (err) {
+                        self.setWriteError(err);
+                    }
+                    // Allow IO between writes
+                    setImmediate(next);
+                });
+            },
+            () => {
+                // The queue is now empty
+                self.isRunning = false;
+            },
+        );
+    }
+
+    private whilst(condition: Function, fn: Function, cb: Function): void {
+        let sync = 0;
+        const next = (err: any) => {
+            if (err) {
+                return cb(err);
+            }
+            if (!condition()) {
+                return cb();
+            }
+            if (sync === 0) {
+                sync = 1;
+                fn((e: any) => {
+                    if (sync === 1) {
+                        // sync function
+                        sync = 4;
+                    }
+                    next(e);
+                });
+                if (sync === 1) {
+                    // async function
+                    sync = 2;
+                }
+                return;
+            }
+            if (sync === 4) {
+                // Prevent "Maximum call stack size exceeded"
+                return process.nextTick(() => {
+                    fn(next);
+                });
+            }
+            // do a sync call as the callback is going to call on a future tick
+            fn(next);
+        };
+
+        next(undefined);
+    }
+
+    private setWriteError(err: any): void {
+        err.isSocketError = true;
+        this.error = new Error('Socket was closed');
+        this.error.isSocketError = true;
+        // Use an special flag for items that haven't been written
+        this.error.requestNotWritten = true;
+        this.error.innerError = err;
+        const q = this.queue;
+        // Not more items can be added to the queue.
+        this.queue = [];
+        for (let i = 0; i < q.length; i++) {
+            const item = q[i];
+            // Use the error marking that it was not written
+            item.callback(this.error);
+        }
+    }
+}
 
 export class ClientConnection {
     private address: Address;
@@ -37,10 +174,12 @@ export class ClientConnection {
     private connectedServerVersion: number;
     private authenticatedAsOwner: boolean;
     private socket: net.Socket;
+    private writeQueue: WriteQueue;
 
     constructor(client: HazelcastClient, address: Address, socket: net.Socket) {
         this.client = client;
         this.socket = socket;
+        this.writeQueue = new WriteQueue(socket);
         this.address = address;
         this.localAddress = new Address(socket.localAddress, socket.localPort);
         this.readBuffer = new Buffer(0);
@@ -72,18 +211,19 @@ export class ClientConnection {
 
     write(buffer: Buffer): Promise<void> {
         const deferred = DeferredPromise<void>();
-        try {
-            this.socket.write(buffer, (err: any) => {
-                if (err) {
-                    deferred.reject(new IOError(err));
-                } else {
-                    this.lastWriteTimeMillis = Date.now();
-                    deferred.resolve();
-                }
-            });
-        } catch (err) {
-            deferred.reject(new IOError(err));
-        }
+        this.writeQueue.push(buffer, () => { deferred.resolve(); });
+        // try {
+        //     this.socket.write(buffer, (err: any) => {
+        //         if (err) {
+        //             deferred.reject(new IOError(err));
+        //         } else {
+        //             this.lastWriteTimeMillis = Date.now();
+        //             deferred.resolve();
+        //         }
+        //     });
+        // } catch (err) {
+        //     deferred.reject(new IOError(err));
+        // }
         return deferred.promise;
     }
 
